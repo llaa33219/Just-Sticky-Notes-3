@@ -247,7 +247,7 @@ async function getIndexHTML() {
 
             <!-- 도구 바 -->
             <div id="toolbar" class="toolbar">
-                <button id="move-tool" class="tool-btn active" title="이동 도구">
+                <button id="move-tool" class="tool-btn active" title="이동 도구 (드래그, 줌)">
                     <span>✋</span>
                 </button>
                 <button id="note-tool" class="tool-btn" title="스티키 노트 생성">
@@ -263,13 +263,13 @@ async function getIndexHTML() {
             <!-- 스티키 노트 에디터 -->
             <div id="note-editor" class="note-editor hidden">
                 <div class="editor-header">
-                    <input type="color" id="note-color" value="#fff740">
-                    <button id="close-editor">×</button>
+                    <input type="color" id="note-color" value="#fff740" title="노트 색상 선택">
+                    <button id="close-editor" title="에디터 닫기">×</button>
                 </div>
-                <textarea id="note-content" placeholder="스티키 노트에 적을 내용을 입력하세요..."></textarea>
+                <textarea id="note-content" placeholder="스티키 노트에 적을 내용을 입력하세요...&#10;&#10;💡 팁: 텍스트를 선택하고 밑줄/동그라미 버튼을 누르세요!"></textarea>
                 <div class="editor-tools">
-                    <button id="underline-btn" class="editor-tool">밑줄</button>
-                    <button id="circle-btn" class="editor-tool">동그라미</button>
+                    <button id="underline-btn" class="editor-tool" title="선택한 텍스트에 밑줄 추가">밑줄</button>
+                    <button id="circle-btn" class="editor-tool" title="선택한 텍스트를 동그라미로 감싸기">동그라미</button>
                     <button id="save-note" class="save-btn">저장</button>
                 </div>
             </div>
@@ -451,6 +451,22 @@ body {
     color: inherit;
 }
 
+/* 스티키 노트 마크업 스타일 */
+.sticky-note .note-content span[style*="text-decoration: underline"] {
+    text-decoration: underline !important;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 2px;
+}
+
+.sticky-note .note-content span[style*="border-radius: 50%"] {
+    border: 2px solid #333 !important;
+    border-radius: 50% !important;
+    padding: 2px 8px !important;
+    display: inline-block !important;
+    margin: 0 2px;
+    background: rgba(255, 255, 255, 0.3);
+}
+
 /* 도구 바 */
 .toolbar {
     position: fixed;
@@ -530,7 +546,7 @@ body {
     left: 50%;
     transform: translate(-50%, -50%);
     width: 300px;
-    height: 250px;
+    height: 280px;
     background: #fff740;
     border-radius: 8px;
     box-shadow: 0 10px 30px rgba(0,0,0,0.3);
@@ -588,19 +604,24 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 8px;
 }
 
 .editor-tool {
-    padding: 8px 12px;
+    padding: 6px 10px;
     border: 1px solid #ddd;
     border-radius: 4px;
     background: white;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 11px;
+    flex: 1;
+    text-align: center;
+    transition: all 0.2s ease;
 }
 
 .editor-tool:hover {
     background: #f0f0f0;
+    transform: scale(1.05);
 }
 
 .save-btn {
@@ -611,10 +632,27 @@ body {
     border-radius: 4px;
     cursor: pointer;
     font-weight: bold;
+    font-size: 12px;
 }
 
 .save-btn:hover {
     background: #3367d6;
+}
+
+/* 에디터 도구 설명 */
+.editor-tool[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    white-space: nowrap;
+    z-index: 1000;
 }
 
 /* 애니메이션 */
@@ -675,7 +713,7 @@ body {
     
     .note-editor {
         width: 90%;
-        height: 200px;
+        height: 250px;
     }
     
     .sticky-note {
@@ -683,6 +721,15 @@ body {
         min-height: 120px;
         padding: 10px;
         font-size: 12px;
+    }
+    
+    .editor-tools {
+        flex-direction: column;
+        gap: 5px;
+    }
+    
+    .editor-tool {
+        width: 100%;
     }
 }`;
 }
@@ -700,9 +747,10 @@ class JustStickyNotes {
         this.selectedNote = null;
         this.isDragging = false;
         this.dragOffset = { x: 0, y: 0 };
-        this.zoom = 1;
+        this.zoomLevel = 1;
         this.panOffset = { x: 0, y: 0 };
         this.isCreatingNote = false;
+        this.editingNote = null;
         
         this.init();
     }
@@ -755,8 +803,8 @@ class JustStickyNotes {
         document.getElementById('note-tool').addEventListener('click', () => this.setTool('note'));
 
         // 줌 컨트롤
-        document.getElementById('zoom-in').addEventListener('click', () => this.zoom(1.2));
-        document.getElementById('zoom-out').addEventListener('click', () => this.zoom(0.8));
+        document.getElementById('zoom-in').addEventListener('click', () => this.changeZoom(1.2));
+        document.getElementById('zoom-out').addEventListener('click', () => this.changeZoom(0.8));
 
         // 캔버스 이벤트
         const canvas = document.getElementById('canvas');
@@ -768,6 +816,8 @@ class JustStickyNotes {
         // 노트 에디터
         document.getElementById('close-editor').addEventListener('click', this.closeNoteEditor.bind(this));
         document.getElementById('save-note').addEventListener('click', this.saveNote.bind(this));
+        document.getElementById('underline-btn').addEventListener('click', this.addUnderline.bind(this));
+        document.getElementById('circle-btn').addEventListener('click', this.addCircle.bind(this));
 
         // 키보드 이벤트
         document.addEventListener('keydown', this.handleKeyDown.bind(this));
@@ -864,7 +914,7 @@ class JustStickyNotes {
 
         const content = document.createElement('div');
         content.className = 'note-content';
-        content.textContent = noteData.content;
+        content.innerHTML = this.formatNoteContent(noteData.content);
         note.appendChild(content);
 
         // 노트 이벤트 리스너
@@ -872,6 +922,14 @@ class JustStickyNotes {
         note.addEventListener('dblclick', (e) => this.editNote(noteData.id));
 
         return note;
+    }
+
+    formatNoteContent(content) {
+        // 밑줄과 동그라미 마크업을 HTML로 변환
+        return content
+            .replace(/\\[u\\](.*?)\\[\\/u\\]/g, '<span style="text-decoration: underline;">$1</span>')
+            .replace(/\\[circle\\](.*?)\\[\\/circle\\]/g, '<span style="border: 2px solid #333; border-radius: 50%; padding: 2px 8px; display: inline-block;">$1</span>')
+            .replace(/\\n/g, '<br>');
     }
 
     handleCanvasMouseDown(e) {
@@ -907,8 +965,8 @@ class JustStickyNotes {
     createNote(e) {
         this.isCreatingNote = true;
         const rect = document.getElementById('canvas').getBoundingClientRect();
-        const x = (e.clientX - rect.left - this.panOffset.x) / this.zoom;
-        const y = (e.clientY - rect.top - this.panOffset.y) / this.zoom;
+        const x = (e.clientX - rect.left - this.panOffset.x) / this.zoomLevel;
+        const y = (e.clientY - rect.top - this.panOffset.y) / this.zoomLevel;
 
         // 노트 에디터 표시
         this.currentNoteData = {
@@ -931,6 +989,7 @@ class JustStickyNotes {
     closeNoteEditor() {
         document.getElementById('note-editor').classList.add('hidden');
         this.isCreatingNote = false;
+        this.editingNote = null;
         this.currentNoteData = null;
     }
 
@@ -943,23 +1002,70 @@ class JustStickyNotes {
             return;
         }
 
-        this.currentNoteData.content = content;
-        this.currentNoteData.color = color;
+        if (this.editingNote) {
+            // 기존 노트 수정
+            this.currentNoteData = {
+                id: this.editingNote,
+                content: content,
+                color: color
+            };
 
-        // WebSocket으로 전송
-        this.ws.send(JSON.stringify({
-            type: 'create_note',
-            ...this.currentNoteData
-        }));
+            this.ws.send(JSON.stringify({
+                type: 'update_note',
+                ...this.currentNoteData
+            }));
 
-        // 로컬에 추가
-        this.addNote(this.currentNoteData);
+            this.updateNote(this.currentNoteData);
+        } else {
+            // 새 노트 생성
+            this.currentNoteData.content = content;
+            this.currentNoteData.color = color;
+
+            this.ws.send(JSON.stringify({
+                type: 'create_note',
+                ...this.currentNoteData
+            }));
+
+            this.addNote(this.currentNoteData);
+        }
 
         this.closeNoteEditor();
         
         // 폼 리셋
         document.getElementById('note-content').value = '';
         document.getElementById('note-color').value = '#fff740';
+    }
+
+    addUnderline() {
+        const textarea = document.getElementById('note-content');
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const selectedText = textarea.value.substring(start, end);
+        
+        if (selectedText) {
+            const newText = textarea.value.substring(0, start) + 
+                           '[u]' + selectedText + '[/u]' + 
+                           textarea.value.substring(end);
+            textarea.value = newText;
+            textarea.setSelectionRange(start, end + 7);
+        }
+        textarea.focus();
+    }
+
+    addCircle() {
+        const textarea = document.getElementById('note-content');
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const selectedText = textarea.value.substring(start, end);
+        
+        if (selectedText) {
+            const newText = textarea.value.substring(0, start) + 
+                           '[circle]' + selectedText + '[/circle]' + 
+                           textarea.value.substring(end);
+            textarea.value = newText;
+            textarea.setSelectionRange(start, end + 17);
+        }
+        textarea.focus();
     }
 
     handleNoteMouseDown(e, noteId) {
@@ -992,8 +1098,8 @@ class JustStickyNotes {
         const note = this.notes.get(this.selectedNote);
         const rect = document.getElementById('canvas').getBoundingClientRect();
         
-        const x = (e.clientX - rect.left - this.dragOffset.x - this.panOffset.x) / this.zoom;
-        const y = (e.clientY - rect.top - this.dragOffset.y - this.panOffset.y) / this.zoom;
+        const x = (e.clientX - rect.left - this.dragOffset.x - this.panOffset.x) / this.zoomLevel;
+        const y = (e.clientY - rect.top - this.dragOffset.y - this.panOffset.y) / this.zoomLevel;
 
         note.element.style.left = x + 'px';
         note.element.style.top = y + 'px';
@@ -1044,18 +1150,18 @@ class JustStickyNotes {
         document.getElementById('canvas').style.cursor = this.currentTool === 'move' ? 'grab' : 'crosshair';
     }
 
-    zoomCanvas(factor) {
-        this.zoom *= factor;
-        this.zoom = Math.max(0.1, Math.min(5, this.zoom));
+    changeZoom(factor) {
+        this.zoomLevel *= factor;
+        this.zoomLevel = Math.max(0.1, Math.min(5, this.zoomLevel));
         this.updateCanvasTransform();
         this.updateZoomLevel();
     }
 
     zoomAt(factor, x, y) {
-        const newZoom = this.zoom * factor;
+        const newZoom = this.zoomLevel * factor;
         const clampedZoom = Math.max(0.1, Math.min(5, newZoom));
         
-        if (clampedZoom !== this.zoom) {
+        if (clampedZoom !== this.zoomLevel) {
             const rect = document.getElementById('canvas').getBoundingClientRect();
             const offsetX = x - rect.left - this.panOffset.x;
             const offsetY = y - rect.top - this.panOffset.y;
@@ -1063,7 +1169,7 @@ class JustStickyNotes {
             this.panOffset.x += offsetX * (1 - factor);
             this.panOffset.y += offsetY * (1 - factor);
             
-            this.zoom = clampedZoom;
+            this.zoomLevel = clampedZoom;
             this.updateCanvasTransform();
             this.updateZoomLevel();
         }
@@ -1071,25 +1177,32 @@ class JustStickyNotes {
 
     updateCanvasTransform() {
         const canvas = document.getElementById('canvas');
-        canvas.style.transform = \`translate(\${this.panOffset.x}px, \${this.panOffset.y}px) scale(\${this.zoom})\`;
+        canvas.style.transform = \`translate(\${this.panOffset.x}px, \${this.panOffset.y}px) scale(\${this.zoomLevel})\`;
     }
 
     updateZoomLevel() {
-        document.getElementById('zoom-level').textContent = Math.round(this.zoom * 100) + '%';
+        document.getElementById('zoom-level').textContent = Math.round(this.zoomLevel * 100) + '%';
     }
 
     editNote(noteId) {
         const note = this.notes.get(noteId);
         if (!note) return;
 
-        // 기존 에디터 로직 (추후 구현)
-        console.log('Edit note:', noteId);
+        this.editingNote = noteId;
+        this.currentNoteData = note.data;
+        
+        // 에디터에 기존 내용 로드
+        document.getElementById('note-content').value = note.data.content;
+        document.getElementById('note-color').value = note.data.color;
+        
+        this.showNoteEditor();
     }
 
     updateNote(noteData) {
         const note = this.notes.get(noteData.id);
         if (note) {
-            note.element.querySelector('.note-content').textContent = noteData.content;
+            note.element.querySelector('.note-content').innerHTML = this.formatNoteContent(noteData.content);
+            note.element.style.backgroundColor = noteData.color;
             note.data = { ...note.data, ...noteData };
         }
     }
