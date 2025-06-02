@@ -1,0 +1,20 @@
+name = "just-sticky-notes"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+[vars]
+GOOGLE_CLIENT_ID = "1073982344256-n632bc7vho3l0e6eabbdfr7si6m0uik9.apps.googleusercontent.com"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "sticky-notes-db"
+database_id = "6dfa2d3f-3b36-4e7f-8c74-e1d984fc459c"
+
+[durable_objects]
+bindings = [
+  { name = "ROOM", class_name = "StickyNotesRoom" }
+]
+
+[[migrations]]
+tag = "v1"
+new_classes = ["StickyNotesRoom"] 

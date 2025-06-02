@@ -1,0 +1,25 @@
+{
+  "name": "just-sticky-notes",
+  "version": "1.0.0",
+  "description": "실시간 스티키 노트 커뮤니티 사이트",
+  "main": "worker.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:create": "wrangler d1 create sticky-notes-db",
+    "db:init": "wrangler d1 execute sticky-notes-db --file=./schema.sql",
+    "db:migrate": "wrangler d1 migrations apply sticky-notes-db"
+  },
+  "keywords": [
+    "cloudflare-workers",
+    "sticky-notes",
+    "realtime",
+    "community",
+    "websocket"
+  ],
+  "author": "Just Sticky Notes Team",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+} 
